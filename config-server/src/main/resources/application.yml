@@ -1,0 +1,23 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: config-server
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_REPO_URI:file:///D:/retail-config-repo}
+          default-label: main
+          clone-on-start: true
+  security:
+    user:
+      name: ${CONFIG_USER:admin}
+      password: ${CONFIG_PASSWORD:admin}
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include: health,info
