@@ -19,7 +19,7 @@ public final class SecurityUtils {
     }
 
     public static Long currentCustomerId(){
-        Number id = jwt().getClaim("customer_id");
+        Number id = jwt().getClaim("customerId");
         return id==null?null:id.longValue();
     }
 
