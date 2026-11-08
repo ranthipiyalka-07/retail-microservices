@@ -12,6 +12,7 @@
     </parent>
 
     <artifactId>customer-service</artifactId>
+    <packaging>pom</packaging>
     <name>customer-service</name>
 
     <dependencies>

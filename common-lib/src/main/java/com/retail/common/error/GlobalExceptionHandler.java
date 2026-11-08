@@ -60,4 +60,31 @@ public class GlobalExceptionHandler {
                 , MDC.get("traceId"),details);
         return ResponseEntity.status(status).body(body);
     }
+
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleUnreadable(Exception ex, HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "Malformed request body", req, null);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "Invalid value for parameter '" + ex.getName() + "'", req, null);
+    }
+
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiErrorResponse> handleMissingParam(
+            org.springframework.web.bind.MissingServletRequestParameterException ex, HttpServletRequest req) {
+        return build(HttpStatus.BAD_REQUEST, "Missing parameter '" + ex.getParameterName() + "'", req, null);
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleMethodNotAllowed(Exception ex, HttpServletRequest req) {
+        return build(HttpStatus.METHOD_NOT_ALLOWED, "Method not allowed", req, null);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleNoResource(Exception ex, HttpServletRequest req) {
+        return build(HttpStatus.NOT_FOUND, "Resource not found", req, null);
+    }
 }
