@@ -29,6 +29,8 @@
         <module>inventory-service</module>
         <module>payment-service</module>
         <module>order-service</module>
+        <module>review-service</module>
+        <module>campaign-service</module>
     </modules>
     <!--
         <modules>

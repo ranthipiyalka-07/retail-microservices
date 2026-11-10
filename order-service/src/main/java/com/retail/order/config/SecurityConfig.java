@@ -1,5 +1,7 @@
 package com.retail.order.config;
 
+import com.retail.order.security.InternalApiKeyFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -10,13 +12,15 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http,
+                                           @Value("${retail.internal.api-key}") String internalKey) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -24,11 +28,13 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        .requestMatchers("/internal/**").hasRole("INTERNAL")
                         .requestMatchers(HttpMethod.GET, "/api/v1/orders/admin").hasAnyRole("STORE_MANAGER", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/orders/*/status").hasAnyRole("STORE_MANAGER", "ADMIN")
                         .requestMatchers("/api/v1/orders", "/api/v1/orders/**").hasRole("CUSTOMER")
                         .anyRequest().denyAll())
-                .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwtAuthenticationConverter())));
+                .oauth2ResourceServer(o -> o.jwt(j -> j.jwtAuthenticationConverter(jwtAuthenticationConverter())))
+                .addFilterBefore(new InternalApiKeyFilter(internalKey), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

@@ -2,6 +2,7 @@ package com.retail.order.repository;
 
 import com.retail.order.domain.CustomerOrder;
 import com.retail.order.domain.OrderStatus;
+import com.retail.order.dto.PurchaseResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -72,4 +74,10 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update CustomerOrder o set o.compensationAttempts = o.compensationAttempts + 1, o.updatedAt = :now where o.id = :id")
     int bumpAttempts(@Param("id") Long id, @Param("now") Instant now);
+
+    /** One row per order of this customer that contains the product and is in one of the given statuses. */
+    @Query("select new com.retail.order.dto.PurchaseResponse(o.id, o.status) from CustomerOrder o join o.items i "
+            + "where o.customerId = :customerId and i.productId = :productId and o.status in :statuses order by o.id")
+    List<PurchaseResponse> findPurchases(@Param("customerId") Long customerId, @Param("productId") Long productId,
+                                         @Param("statuses") Collection<OrderStatus> statuses);
 }

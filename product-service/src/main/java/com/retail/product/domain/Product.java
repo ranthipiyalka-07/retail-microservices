@@ -40,11 +40,14 @@ public class Product {
     @Column(nullable = false, length = 20)
     private ProductStatus status = ProductStatus.ACTIVE;
 
-    @Column(name = "avg_rating", nullable = false, precision = 3, scale = 2)
+    @Column(name = "avg_rating", nullable = false, updatable = false, precision = 3, scale = 2)
     private BigDecimal avgRating = BigDecimal.ZERO;
 
-    @Column(name = "review_count", nullable = false)
+    @Column(name = "review_count", nullable = false, updatable = false)
     private int reviewCount;
+
+    @Column(name = "rating_version", nullable = false, updatable = false)
+    private long ratingVersion;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

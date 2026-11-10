@@ -1,0 +1,1 @@
+ALTER TABLE products ADD COLUMN rating_version BIGINT NOT NULL DEFAULT 0;
