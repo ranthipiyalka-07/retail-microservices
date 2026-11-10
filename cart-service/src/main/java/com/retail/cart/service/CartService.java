@@ -244,4 +244,13 @@ public class CartService {
         RANDOM.nextBytes(bytes);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
+
+    /** Used by order-service after a paid order. Only the cart that was ordered is closed; anything else is left alone. */
+    public boolean markCheckedOut(Long customerId, Long cartId) {
+        return run(() -> {
+            Optional<Cart> cart = carts.findByCustomerIdAndStatus(customerId, CartStatus.ACTIVE);
+            return cart.isPresent() && cart.get().getId().equals(cartId)
+                    && carts.transition(cartId, CartStatus.ACTIVE, CartStatus.CHECKED_OUT, Instant.now()) == 1;
+        });
+    }
 }
