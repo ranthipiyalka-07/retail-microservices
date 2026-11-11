@@ -107,4 +107,16 @@ class PricedCatalogServiceTest {
 
         assertThatThrownBy(() -> service.get(99L)).isInstanceOf(ResourceNotFoundException.class);
     }
+
+    @Test
+    void batchSummariesGetCampaignPricesToo() {
+        when(products.findActiveSummaries(any())).thenReturn(List.of(summary(1, "19.99"), summary(2, "24.50")));
+        when(pricing.quote(any())).thenReturn(Map.of(1L, new CampaignClient.PriceData(1L,
+                new BigDecimal("15.99"), new BigDecimal("4.00"), "Tee Sale")));
+
+        List<ProductSummary> result = service.summaries(List.of(1L, 2L));
+
+        assertThat(result.get(0).effectivePrice()).isEqualByComparingTo("15.99");
+        assertThat(result.get(1).effectivePrice()).isEqualByComparingTo("24.50");
+    }
 }

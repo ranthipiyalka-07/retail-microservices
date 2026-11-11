@@ -24,4 +24,5 @@ public interface ProductRepository extends JpaRepository<Product, Long>, JpaSpec
             + "updated_at = :now WHERE id = :id AND rating_version < :version", nativeQuery = true)
     int updateRating(@Param("id") Long id, @Param("average") BigDecimal average,
                      @Param("reviewCount") int reviewCount, @Param("version") long version, @Param("now") Instant now);
+    java.util.List<Product> findByIdInAndStatus(java.util.Collection<Long> ids, ProductStatus status);
 }

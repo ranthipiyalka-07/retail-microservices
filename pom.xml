@@ -31,6 +31,7 @@
         <module>order-service</module>
         <module>review-service</module>
         <module>campaign-service</module>
+        <module>wishlist-service</module>
     </modules>
     <!--
         <modules>

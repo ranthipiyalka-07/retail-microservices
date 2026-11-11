@@ -6,6 +6,7 @@ import com.retail.product.domain.ProductStatus;
 import com.retail.product.dto.ImageRequest;
 import com.retail.product.dto.ProductDetail;
 import com.retail.product.dto.ProductRequest;
+import com.retail.product.dto.ProductSummary;
 import com.retail.product.exception.ConflictException;
 import com.retail.product.exception.InvalidRequestException;
 import com.retail.product.repository.CategoryRepository;
@@ -23,11 +24,13 @@ import org.springframework.data.jpa.domain.Specification;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -151,5 +154,24 @@ class ProductServiceTest {
         verify(products).findAll(any(Specification.class), captor.capture());
         assertThat(captor.getValue().getPageSize()).isEqualTo(50);
         assertThat(captor.getValue().getPageNumber()).isZero();
+    }
+
+    @Test
+    void summariesOnlyContainActiveProductsAndRejectTooManyIds() {
+        Product p = new Product();
+        p.setId(1L);
+        p.setSku("TEE-001");
+        p.setName("Tee");
+        p.setCategoryId(3L);
+        p.setBasePrice(new BigDecimal("19.99"));
+        p.setStatus(ProductStatus.ACTIVE);
+        when(products.findByIdInAndStatus(any(), eq(ProductStatus.ACTIVE))).thenReturn(List.of(p));
+
+        assertThat(service.findActiveSummaries(List.of(1L, 2L, 1L))).extracting(ProductSummary::id).containsExactly(1L);
+        verify(products).findByIdInAndStatus(eq(List.of(1L, 2L)), eq(ProductStatus.ACTIVE));    // duplicates removed
+
+        assertThat(service.findActiveSummaries(List.of())).isEmpty();
+        assertThatThrownBy(() -> service.findActiveSummaries(LongStream.rangeClosed(1, 101).boxed().toList()))
+                .isInstanceOf(InvalidRequestException.class);
     }
 }

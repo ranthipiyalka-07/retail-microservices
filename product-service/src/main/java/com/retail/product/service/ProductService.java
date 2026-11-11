@@ -5,7 +5,12 @@ import com.retail.product.domain.Product;
 import com.retail.product.domain.ProductAttribute;
 import com.retail.product.domain.ProductImage;
 import com.retail.product.domain.ProductStatus;
-import com.retail.product.dto.*;
+import com.retail.product.dto.PageResponse;
+import com.retail.product.dto.ProductDetail;
+import com.retail.product.dto.ProductRequest;
+import com.retail.product.dto.ProductSummary;
+import com.retail.product.dto.ImageRequest;
+import com.retail.product.dto.AttributeRequest;
 import com.retail.product.exception.ConflictException;
 import com.retail.product.exception.InvalidRequestException;
 import com.retail.product.repository.CategoryRepository;
@@ -36,6 +41,7 @@ public class ProductService {
     private static final int DEFAULT_PAGE_SIZE = 20;
     private static final int MAX_TOKENS = 5;
     private static final int MAX_TOKEN_LENGTH = 100;
+    private static final int MAX_BATCH = 100;
 
     private final ProductRepository products;
     private final CategoryRepository categories;
@@ -207,5 +213,23 @@ public class ProductService {
                     "Unknown sort '" + key + "'. Allowed: newest, price_asc, price_desc, rating, name");
         };
         return base.and(Sort.by(Sort.Order.asc("id")));
+    }
+
+    /**
+     * For other services (the wishlist). Only ACTIVE products: unknown, inactive and deleted ids are simply
+     * missing from the answer.
+     */
+    @Transactional(readOnly = true)
+    public List<ProductSummary> findActiveSummaries(List<Long> ids) {
+        List<Long> distinct = ids == null ? List.of()
+                : ids.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (distinct.isEmpty()) {
+            return List.of();
+        }
+        if (distinct.size() > MAX_BATCH) {
+            throw new InvalidRequestException("At most " + MAX_BATCH + " products per request");
+        }
+        return products.findByIdInAndStatus(distinct, ProductStatus.ACTIVE).stream()
+                .map(ProductMapper::toSummary).toList();
     }
 }

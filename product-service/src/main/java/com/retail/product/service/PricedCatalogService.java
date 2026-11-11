@@ -28,14 +28,8 @@ public class PricedCatalogService {
                                                Integer page, Integer size) {
         PageResponse<ProductSummary> result = products.search(q, categoryId, brand, minPrice, maxPrice, minRating,
                 sort, page, size);
-        Map<Long, CampaignClient.PriceData> quotes = pricing.quote(result.content().stream()
-                .map(s -> new CampaignClient.PriceQuery.Item(s.id(), s.categoryId(), s.basePrice())).toList());
-        List<ProductSummary> priced = result.content().stream()
-                .map(s -> {
-                    CampaignClient.PriceData quote = quotes.get(s.id());
-                    return quote == null ? s : s.withPrice(quote.effectivePrice(), quote.discountAmount(), quote.campaignName());
-                }).toList();
-        return new PageResponse<>(priced, result.page(), result.size(), result.totalElements(), result.totalPages());
+        return new PageResponse<>(withPrices(result.content()), result.page(), result.size(),
+                result.totalElements(), result.totalPages());
     }
 
     public ProductDetail get(Long id) {
@@ -44,5 +38,19 @@ public class PricedCatalogService {
                 new CampaignClient.PriceQuery.Item(detail.id(), detail.categoryId(), detail.basePrice()))).get(detail.id());
         return quote == null ? detail
                 : detail.withPrice(quote.effectivePrice(), quote.discountAmount(), quote.campaignName());
+    }
+
+    /** For other services: active products only, with campaign prices. */
+    public List<ProductSummary> summaries(List<Long> ids) {
+        return withPrices(products.findActiveSummaries(ids));
+    }
+
+    private List<ProductSummary> withPrices(List<ProductSummary> summaries) {
+        Map<Long, CampaignClient.PriceData> quotes = pricing.quote(summaries.stream()
+                .map(s -> new CampaignClient.PriceQuery.Item(s.id(), s.categoryId(), s.basePrice())).toList());
+        return summaries.stream().map(s -> {
+            CampaignClient.PriceData quote = quotes.get(s.id());
+            return quote == null ? s : s.withPrice(quote.effectivePrice(), quote.discountAmount(), quote.campaignName());
+        }).toList();
     }
 }
