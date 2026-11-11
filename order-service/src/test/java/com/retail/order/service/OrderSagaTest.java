@@ -1,10 +1,7 @@
 package com.retail.order.service;
 
 import com.retail.common.error.ResourceNotFoundException;
-import com.retail.order.client.CartClient;
-import com.retail.order.client.Downstream;
-import com.retail.order.client.PaymentClient;
-import com.retail.order.client.ProductClient;
+import com.retail.order.client.*;
 import com.retail.order.config.OrderProperties;
 import com.retail.order.domain.CustomerOrder;
 import com.retail.order.domain.DueFlag;
@@ -110,7 +107,7 @@ class OrderSagaTest {
         when(downstream.cart(5L)).thenReturn(new CartClient.CartData(77L,
                 List.of(new CartClient.CartData.Line(10L, "Tee", new BigDecimal("19.99"), 2))));
         when(downstream.product(10L)).thenReturn(Optional.of(
-                new ProductClient.ProductData(10L, "TEE-001", "Classic Tee", new BigDecimal("19.99"))));
+                new ProductClient.ProductData(10L, "TEE-001", "Classic Tee", 3L, new BigDecimal("19.99"))));
         when(downstream.reserve(eq(1L), any())).thenReturn(Downstream.ReserveResult.success());
     }
 
@@ -382,5 +379,38 @@ class OrderSagaTest {
         when(state.findOwned(99L, 1L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> saga.cancel(99L, 1L)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void aCampaignDiscountLowersTheChargedTotalAndIsStoredOnTheLine() {
+        cartWithTee();                                                         // 2 x 19.99
+        when(downstream.prices(any())).thenReturn(List.of(new CampaignClient.PriceData(10L, new BigDecimal("19.99"),
+                new BigDecimal("15.99"), new BigDecimal("4.00"), 3L, "Tee Sale")));
+        when(downstream.charge(any())).thenReturn(payment("SUCCESS", null));
+        when(downstream.commit(1L)).thenReturn(Downstream.CommitResult.COMMITTED);
+
+        place();
+
+        var charge = org.mockito.ArgumentCaptor.forClass(PaymentClient.ChargeRequest.class);
+        verify(downstream).charge(charge.capture());
+        // gross 39.98, discount 8.00, net 31.98, tax 3.20, shipping 5.00
+        assertThat(charge.getValue().amount()).isEqualByComparingTo("40.18");
+
+        var created = org.mockito.ArgumentCaptor.forClass(NewOrder.class);
+        verify(state).createPending(created.capture());
+        assertThat(created.getValue().totals().discount()).isEqualByComparingTo("8.00");
+        assertThat(created.getValue().lines().get(0).unitPrice()).isEqualByComparingTo("19.99");
+        assertThat(created.getValue().lines().get(0).lineDiscount()).isEqualByComparingTo("8.00");
+        assertThat(created.getValue().lines().get(0).lineTotal()).isEqualByComparingTo("31.98");
+    }
+
+    @Test
+    void campaignServiceOutageFailsTheCheckoutBeforeAnythingIsCreated() {
+        cartWithTee();
+        when(downstream.prices(any())).thenThrow(new RemoteUnavailableException("campaign"));
+
+        assertThatThrownBy(this::place).isInstanceOf(RemoteUnavailableException.class);
+        verify(state, never()).createPending(any());
+        verify(downstream, never()).charge(any());
     }
 }

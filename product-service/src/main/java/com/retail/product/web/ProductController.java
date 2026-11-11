@@ -4,6 +4,7 @@ import com.retail.product.dto.PageResponse;
 import com.retail.product.dto.ProductDetail;
 import com.retail.product.dto.ProductRequest;
 import com.retail.product.dto.ProductSummary;
+import com.retail.product.service.PricedCatalogService;
 import com.retail.product.service.ProductService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -16,9 +17,11 @@ import java.math.BigDecimal;
 public class ProductController {
 
     private final ProductService productService;
+    private final PricedCatalogService catalog;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, PricedCatalogService catalog) {
         this.productService = productService;
+        this.catalog = catalog;
     }
 
     @GetMapping
@@ -31,12 +34,12 @@ public class ProductController {
                                                @RequestParam(required = false) String sort,
                                                @RequestParam(required = false) Integer page,
                                                @RequestParam(required = false) Integer size) {
-        return productService.search(q, categoryId, brand, minPrice, maxPrice, minRating, sort, page, size);
+        return catalog.search(q, categoryId, brand, minPrice, maxPrice, minRating, sort, page, size);
     }
 
     @GetMapping("/{id}")
     public ProductDetail get(@PathVariable Long id) {
-        return productService.get(id);
+        return catalog.get(id);
     }
 
     @PostMapping

@@ -36,17 +36,26 @@ public class Downstream {
     private final CircuitBreakerFactory<?, ?> breakers;
     private final ObjectMapper mapper;
     private final String internalKey;
+    private final CampaignClient campaigns;
 
     public Downstream(CartClient carts, InventoryClient inventory, PaymentClient payments, ProductClient products,
-                      CircuitBreakerFactory<?, ?> breakers, ObjectMapper mapper,
+                      CampaignClient campaigns, CircuitBreakerFactory<?, ?> breakers, ObjectMapper mapper,
                       @Value("${retail.internal.api-key}") String internalKey) {
         this.carts = carts;
         this.inventory = inventory;
         this.payments = payments;
         this.products = products;
+        this.campaigns = campaigns;
         this.breakers = breakers;
         this.mapper = mapper;
         this.internalKey = internalKey;
+    }
+
+    // ---------- campaign ----------
+
+    /** One entry per item. A failure is a RemoteUnavailableException: checkout must not guess the price. */
+    public List<CampaignClient.PriceData> prices(List<CampaignClient.PriceQuery.Item> items) {
+        return call("campaign", () -> campaigns.effective(internalKey, new CampaignClient.PriceQuery(items)));
     }
 
     // ---------- cart ----------

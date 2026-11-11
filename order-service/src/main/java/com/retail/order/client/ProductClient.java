@@ -12,5 +12,5 @@ public interface ProductClient {
     @GetMapping("/api/v1/products/{id}")           // public endpoint: only ACTIVE products are returned
     ProductData getProduct(@PathVariable("id") Long id);
 
-    record ProductData(Long id, String sku, String name, BigDecimal basePrice) {}
+    record ProductData(Long id, String sku, String name, Long categoryId, BigDecimal basePrice) {}
 }

@@ -78,7 +78,7 @@ class CartServiceTest {
     }
 
     private static ProductInfo tee() {
-        return new ProductInfo(10L, "Classic Tee", new BigDecimal("19.99"),
+        return new ProductInfo(10L, "Classic Tee", new BigDecimal("19.99"), null,
                 List.of(new ProductInfo.Image("https://example.com/tee.jpg", true)));
     }
 

@@ -10,7 +10,8 @@ import java.util.List;
 @Component
 public class PriceCalculator {
 
-    public record Totals(BigDecimal subtotal, BigDecimal tax, BigDecimal shipping, BigDecimal grandTotal) {}
+    public record Totals(BigDecimal subtotal, BigDecimal discount, BigDecimal tax, BigDecimal shipping,
+                         BigDecimal grandTotal) {}
 
     private final OrderProperties props;
 
@@ -18,15 +19,18 @@ public class PriceCalculator {
         this.props = props;
     }
 
-    /** Campaign discounts will be subtracted here once campaign-service exists. */
     public Totals compute(List<PricedLine> lines) {
-        BigDecimal subtotal = lines.stream().map(PricedLine::lineTotal)
+        BigDecimal gross = lines.stream().map(PricedLine::grossTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal tax = subtotal.multiply(props.taxRate()).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal discount = lines.stream().map(PricedLine::lineDiscount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal net = gross.subtract(discount);
+
+        BigDecimal tax = net.multiply(props.taxRate()).setScale(2, RoundingMode.HALF_UP);
         boolean freeShipping = props.freeShippingThreshold() != null
-                && subtotal.compareTo(props.freeShippingThreshold()) >= 0;
+                && net.compareTo(props.freeShippingThreshold()) >= 0;
         BigDecimal shipping = freeShipping
                 ? BigDecimal.ZERO.setScale(2) : props.shippingFee().setScale(2, RoundingMode.HALF_UP);
-        return new Totals(subtotal, tax, shipping, subtotal.add(tax).add(shipping));
+        return new Totals(gross, discount, tax, shipping, net.add(tax).add(shipping));
     }
 }

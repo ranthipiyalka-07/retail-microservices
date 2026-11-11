@@ -4,9 +4,12 @@ import com.retail.product.domain.Product;
 import com.retail.product.domain.ProductImage;
 import com.retail.product.dto.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 final class ProductMapper {
+    private static final BigDecimal NO_DISCOUNT = BigDecimal.ZERO.setScale(2);
+
     private ProductMapper() {}
 
     static ProductSummary toSummary(Product p) {
@@ -14,7 +17,8 @@ final class ProductMapper {
                 .or(() -> p.getImages().stream().findFirst())
                 .map(ProductImage::getUrl).orElse(null);
         return new ProductSummary(p.getId(), p.getSku(), p.getName(), p.getBrand(), p.getCategoryId(),
-                p.getBasePrice(), p.getAvgRating(), p.getReviewCount(), primary);
+                p.getBasePrice(), p.getBasePrice(), NO_DISCOUNT, null,
+                p.getAvgRating(), p.getReviewCount(), primary);
     }
 
     static ProductDetail toDetail(Product p) {
@@ -23,7 +27,7 @@ final class ProductMapper {
         List<AttributeResponse> attributes = p.getAttributes().stream()
                 .map(a -> new AttributeResponse(a.getName(), a.getValue())).toList();
         return new ProductDetail(p.getId(), p.getSku(), p.getName(), p.getDescription(), p.getBrand(),
-                p.getCategoryId(), p.getBasePrice(), p.getStatus(), p.getAvgRating(), p.getReviewCount(),
-                images, attributes, p.getCreatedAt());
+                p.getCategoryId(), p.getBasePrice(), p.getBasePrice(), NO_DISCOUNT, null, p.getStatus(),
+                p.getAvgRating(), p.getReviewCount(), images, attributes, p.getCreatedAt());
     }
 }

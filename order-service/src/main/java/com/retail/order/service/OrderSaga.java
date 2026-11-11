@@ -17,6 +17,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import com.retail.order.client.CampaignClient;
+import com.retail.order.client.ProductClient;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -128,24 +135,50 @@ public class OrderSaga {
         };
     }
 
+    private record Resolved(ProductClient.ProductData product, int quantity) {}
+
     private List<PricedLine> price(CartClient.CartData cart) {
-        List<PricedLine> lines = new ArrayList<>();
+        List<Resolved> resolved = new ArrayList<>();
         List<String> unavailable = new ArrayList<>();
         for (CartClient.CartData.Line line : cart.items()) {
-            Optional<com.retail.order.client.ProductClient.ProductData> product = downstream.product(line.productId());
+            Optional<ProductClient.ProductData> product = downstream.product(line.productId());
             if (product.isEmpty()) {
                 unavailable.add(line.name());
-                continue;
+            } else {
+                resolved.add(new Resolved(product.get(), line.quantity()));
             }
-            var p = product.get();
-            lines.add(new PricedLine(p.id(), p.sku(), p.name(),
-                    p.basePrice().setScale(2, java.math.RoundingMode.HALF_UP), line.quantity()));
         }
         if (!unavailable.isEmpty()) {
             throw new ConflictException("These items are no longer available, please remove them from your cart: "
                     + String.join(", ", unavailable));
         }
+
+        // One batch call. campaign-service is the only source of discounts. If it is down, checkout fails with a
+        // 503 instead of charging the full price to a customer who saw a discount.
+        List<CampaignClient.PriceData> quotes = downstream.prices(resolved.stream()
+                .map(r -> new CampaignClient.PriceQuery.Item(r.product().id(), r.product().categoryId(),
+                        money(r.product().basePrice())))
+                .toList());
+        Map<Long, CampaignClient.PriceData> byProduct = quotes == null ? Map.of()
+                : quotes.stream().collect(Collectors.toMap(CampaignClient.PriceData::productId,
+                Function.identity(), (first, second) -> first));
+
+        List<PricedLine> lines = new ArrayList<>();
+        for (Resolved r : resolved) {
+            ProductClient.ProductData p = r.product();
+            BigDecimal base = money(p.basePrice());
+            CampaignClient.PriceData quote = byProduct.get(p.id());
+            BigDecimal discount = quote == null || quote.discountAmount() == null ? BigDecimal.ZERO : quote.discountAmount();
+            // Never trust a number blindly: a discount is between 0 and "everything but one cent".
+            BigDecimal maxDiscount = base.subtract(new BigDecimal("0.01")).max(BigDecimal.ZERO);
+            discount = discount.max(BigDecimal.ZERO).min(maxDiscount).setScale(2, RoundingMode.HALF_UP);
+            lines.add(new PricedLine(p.id(), p.sku(), p.name(), base, discount, r.quantity()));
+        }
         return lines;
+    }
+
+    private static BigDecimal money(BigDecimal value) {
+        return value.setScale(2, RoundingMode.HALF_UP);
     }
 
     // ================= settle (shared by the request, retries and the reconciler) =================

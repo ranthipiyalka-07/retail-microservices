@@ -93,6 +93,7 @@ public class OrderStateService {
         order.setShippingFee(cmd.totals().shipping());
         order.setGrandTotal(cmd.totals().grandTotal());
         order.setPlacedAt(Instant.now());
+        order.setDiscountTotal(cmd.totals().discount());
 
         for (PricedLine line : cmd.lines()) {
             OrderItem item = new OrderItem();
@@ -104,6 +105,7 @@ public class OrderStateService {
             item.setDiscountAmount(BigDecimal.ZERO.setScale(2));
             item.setQuantity(line.quantity());
             item.setLineTotal(line.lineTotal());
+            item.setDiscountAmount(line.lineDiscount());
             order.getItems().add(item);
         }
         order.getAddresses().add(address(order, AddressType.SHIPPING, cmd.shipping()));

@@ -45,4 +45,16 @@ class PriceCalculatorTest {
         assertThat(totals.tax()).isEqualByComparingTo("6.45");           // 6.448 rounded half up
         assertThat(totals.grandTotal()).isEqualByComparingTo("75.93");
     }
+
+    @Test
+    void discountsLowerTheTaxAndCanMakeShippingFree() {
+        var totals = calculator.compute(List.of(
+                new PricedLine(1L, "SKU-1", "Item", new BigDecimal("60.00"), new BigDecimal("10.00"), 2)));
+
+        assertThat(totals.subtotal()).isEqualByComparingTo("120.00");           // before the discount
+        assertThat(totals.discount()).isEqualByComparingTo("20.00");
+        assertThat(totals.tax()).isEqualByComparingTo("10.00");                 // 10% of 100.00
+        assertThat(totals.shipping()).isEqualByComparingTo("0.00");             // 100.00 reaches the free-shipping threshold
+        assertThat(totals.grandTotal()).isEqualByComparingTo("110.00");
+    }
 }

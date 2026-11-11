@@ -23,7 +23,7 @@ public class OrderAssembler {
     public OrderResponse detail(CustomerOrder o) {
         List<OrderItemResponse> items = o.getItems().stream()
                 .map(i -> new OrderItemResponse(i.getProductId(), i.getSku(), i.getProductName(),
-                        i.getUnitPrice(), i.getQuantity(), i.getLineTotal()))
+                        i.getUnitPrice(), i.getDiscountAmount(), i.getQuantity(), i.getLineTotal()))
                 .toList();
         return new OrderResponse(o.getId(), o.getOrderNumber(), o.getStatus(), o.getSubtotal(), o.getDiscountTotal(),
                 o.getTaxTotal(), o.getShippingFee(), o.getGrandTotal(), o.getCurrency(), o.getFailureReason(),

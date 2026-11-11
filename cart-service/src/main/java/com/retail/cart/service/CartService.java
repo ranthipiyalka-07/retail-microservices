@@ -64,7 +64,7 @@ public class CartService {
         // 1. The remote call first, outside any transaction.
         ProductInfo product = productLookup.find(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", productId));
-        BigDecimal price = product.basePrice().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal price = product.currentPrice().setScale(2, RoundingMode.HALF_UP);
 
         // 2. Then the database work.
         return run(() -> {
