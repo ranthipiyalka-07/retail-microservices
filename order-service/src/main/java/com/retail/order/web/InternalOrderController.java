@@ -3,7 +3,9 @@ package com.retail.order.web;
 import com.retail.order.domain.OrderStatus;
 import com.retail.order.dto.PurchaseResponse;
 import com.retail.order.repository.CustomerOrderRepository;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -29,5 +31,13 @@ public class InternalOrderController {
     @GetMapping("/purchases")
     public List<PurchaseResponse> purchases(@RequestParam Long customerId, @RequestParam Long productId) {
         return orders.findPurchases(customerId, productId, PURCHASED);
+    }
+
+    /** 204 when the order belongs to the customer (any status, failed orders included), 404 otherwise. */
+    @GetMapping("/{orderId}/ownership")
+    public ResponseEntity<Void> ownership(@PathVariable Long orderId, @RequestParam Long customerId) {
+        return orders.existsByIdAndCustomerId(orderId, customerId)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.notFound().build();
     }
 }

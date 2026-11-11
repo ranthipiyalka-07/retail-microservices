@@ -32,6 +32,7 @@
         <module>review-service</module>
         <module>campaign-service</module>
         <module>wishlist-service</module>
+        <module>support-service</module>
     </modules>
     <!--
         <modules>

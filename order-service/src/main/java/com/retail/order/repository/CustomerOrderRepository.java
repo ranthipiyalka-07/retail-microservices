@@ -80,4 +80,6 @@ public interface CustomerOrderRepository extends JpaRepository<CustomerOrder, Lo
             + "where o.customerId = :customerId and i.productId = :productId and o.status in :statuses order by o.id")
     List<PurchaseResponse> findPurchases(@Param("customerId") Long customerId, @Param("productId") Long productId,
                                          @Param("statuses") Collection<OrderStatus> statuses);
+
+    boolean existsByIdAndCustomerId(Long id, Long customerId);
 }
