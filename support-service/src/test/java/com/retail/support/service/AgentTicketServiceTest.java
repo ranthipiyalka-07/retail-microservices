@@ -1,6 +1,7 @@
 package com.retail.support.service;
 
 import com.retail.common.error.ResourceNotFoundException;
+import com.retail.common.event.SupportTicketRepliedEvent;
 import com.retail.support.config.SupportProperties;
 import com.retail.support.domain.*;
 import com.retail.support.dto.AgentMessage;
@@ -18,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -44,13 +46,14 @@ class AgentTicketServiceTest {
 
     @Mock SupportTicketRepository tickets;
     @Mock TicketMessageRepository messages;
+    @Mock ApplicationEventPublisher events;
 
     private AgentTicketService service;
     private final Staff agent = new Staff(9L, "agent@retail.local");
 
     @BeforeEach
     void setUp() {
-        service = new AgentTicketService(tickets, messages, new SupportProperties(2, 3, Duration.ofDays(7)));
+        service = new AgentTicketService(tickets, messages, new SupportProperties(2, 3, Duration.ofDays(7)), events);
         when(messages.save(any(TicketMessage.class))).thenAnswer(returnsFirstArg());
         when(messages.countByTicketId(anyLong())).thenReturn(0L);
     }
@@ -327,5 +330,19 @@ class AgentTicketServiceTest {
                 .isInstanceOf(InvalidRequestException.class);
         assertThatThrownBy(() -> service.list(null, null, null, "colour", agent, 0, 10))
                 .isInstanceOf(InvalidRequestException.class).hasMessageContaining("Allowed");
+    }
+
+    @Test
+    void aPublicReplyIsAnnouncedToTheCustomerButAnInternalNoteIsNot() {
+        locked(1L, TicketStatus.OPEN, null);
+
+        service.reply(1L, "Internal thoughts.", true, agent);
+        verify(events, never()).publishEvent(any(Object.class));
+
+        service.reply(1L, "We are checking.", false, agent);
+        ArgumentCaptor<SupportTicketRepliedEvent> event = ArgumentCaptor.forClass(SupportTicketRepliedEvent.class);
+        verify(events).publishEvent(event.capture());
+        assertThat(event.getValue().ticketNumber()).isEqualTo("TKT-TEST");
+        assertThat(event.getValue().customerEmail()).isEqualTo("john@example.com");
     }
 }

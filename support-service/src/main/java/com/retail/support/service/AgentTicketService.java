@@ -1,6 +1,7 @@
 package com.retail.support.service;
 
 import com.retail.common.error.ResourceNotFoundException;
+import com.retail.common.event.SupportTicketRepliedEvent;
 import com.retail.support.config.SupportProperties;
 import com.retail.support.domain.*;
 import com.retail.support.dto.*;
@@ -12,6 +13,7 @@ import com.retail.support.repository.TicketMessageRepository;
 import com.retail.support.repository.TicketSpecifications;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -22,6 +24,7 @@ import java.time.Instant;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class AgentTicketService {
@@ -38,12 +41,14 @@ public class AgentTicketService {
     private final SupportTicketRepository tickets;
     private final TicketMessageRepository messages;
     private final SupportProperties props;
+    private final ApplicationEventPublisher events;
 
     public AgentTicketService(SupportTicketRepository tickets, TicketMessageRepository messages,
-                              SupportProperties props) {
+                              SupportProperties props, ApplicationEventPublisher events) {
         this.tickets = tickets;
         this.messages = messages;
         this.props = props;
+        this.events = events;
     }
 
     // ================= read =================
@@ -95,38 +100,6 @@ public class AgentTicketService {
         ticket.setUpdatedAt(Instant.now());
         log.info("Ticket claimed: ticketId={}, by={}", ticketId, staff.email());
         return detail(ticket);
-    }
-
-    /**
-     * A public reply is what the customer sees. The first one on an unassigned ticket assigns it to the agent and
-     * starts the work. An internal note changes nothing (and does not move the customer-visible update time).
-     */
-    @Transactional
-    public AgentMessage reply(Long ticketId, String text, boolean internal, Staff staff) {
-        String message = TicketMapper.text(text);
-        if (message.isEmpty()) {
-            throw new InvalidRequestException("The message must contain visible characters");
-        }
-        SupportTicket ticket = lock(ticketId);
-        if (ticket.getStatus() == TicketStatus.CLOSED) {
-            throw new ConflictException("This ticket is closed");
-        }
-        if (messages.countByTicketId(ticketId) >= props.maxMessagesPerTicket()) {
-            throw new LimitExceededException("This ticket has reached the limit of "
-                    + props.maxMessagesPerTicket() + " messages");
-        }
-
-        TicketMessage saved = messages.save(new TicketMessage(ticketId, SenderType.AGENT, staff.userId(),
-                staff.email(), internal, message));
-
-        if (!internal) {
-            assignIfNobody(ticket, staff);
-            if (ticket.getStatus() == TicketStatus.OPEN || ticket.getStatus() == TicketStatus.ASSIGNED) {
-                ticket.setStatus(TicketStatus.IN_PROGRESS);
-            }
-            ticket.setUpdatedAt(Instant.now());
-        }
-        return TicketMapper.agentMessage(saved);
     }
 
     @Transactional
@@ -194,5 +167,36 @@ public class AgentTicketService {
             case "newest" -> Sort.by(Sort.Order.desc("id"));
             default -> throw new InvalidRequestException("Unknown sort '" + key + "'. Allowed: oldest, newest");
         };
+    }
+
+    @Transactional
+    public AgentMessage reply(Long ticketId, String text, boolean internal, Staff staff) {
+        String message = TicketMapper.text(text);
+        if (message.isEmpty()) {
+            throw new InvalidRequestException("The message must contain visible characters");
+        }
+        SupportTicket ticket = lock(ticketId);
+        if (ticket.getStatus() == TicketStatus.CLOSED) {
+            throw new ConflictException("This ticket is closed");
+        }
+        if (messages.countByTicketId(ticketId) >= props.maxMessagesPerTicket()) {
+            throw new LimitExceededException("This ticket has reached the limit of "
+                    + props.maxMessagesPerTicket() + " messages");
+        }
+
+        TicketMessage saved = messages.save(new TicketMessage(ticketId, SenderType.AGENT, staff.userId(),
+                staff.email(), internal, message));
+
+        if (!internal) {
+            assignIfNobody(ticket, staff);
+            if (ticket.getStatus() == TicketStatus.OPEN || ticket.getStatus() == TicketStatus.ASSIGNED) {
+                ticket.setStatus(TicketStatus.IN_PROGRESS);
+            }
+            ticket.setUpdatedAt(Instant.now());
+            // Only a public reply is announced, and the event carries no message text.
+            events.publishEvent(new SupportTicketRepliedEvent(UUID.randomUUID(), Instant.now(),
+                    ticket.getTicketNumber(), ticket.getCustomerId(), ticket.getCustomerEmail(), ticket.getSubject()));
+        }
+        return TicketMapper.agentMessage(saved);
     }
 }

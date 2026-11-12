@@ -33,6 +33,7 @@
         <module>campaign-service</module>
         <module>wishlist-service</module>
         <module>support-service</module>
+        <module>notification-service</module>
     </modules>
     <!--
         <modules>

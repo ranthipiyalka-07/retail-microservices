@@ -15,6 +15,7 @@ public final class Topics {
     public static final String CAMPAIGN_ACTIVATED    = "campaign.activated";
     public static final String CAMPAIGN_EXPIRED      = "campaign.expired";
     public static final String INVENTORY_LOW_STOCK   = "inventory.low-stock";
+    public static final String SUPPORT_TICKET_REPLIED = "support.ticket-replied";
 
     /** Dead-letter topic name for a failed message, e.g. order.created.DLT */
     public static String dlt(String topic) {
