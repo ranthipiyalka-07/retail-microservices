@@ -97,7 +97,7 @@ services:
       CONFIG_REPO_URI: file:///config-repo
       SPRING_CLOUD_CONFIG_SERVER_GIT_URI: file:///config-repo
     volumes:
-      - ${CONFIG_REPO_PATH:?set CONFIG_REPO_PATH in .env}:/config-repo:ro
+      - ${CONFIG_REPO_PATH:?set CONFIG_REPO_PATH in .env}:/config-repo
     ports:
       - "127.0.0.1:8888:8888"
     healthcheck:

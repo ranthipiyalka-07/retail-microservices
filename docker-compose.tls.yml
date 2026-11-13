@@ -1,0 +1,151 @@
+# TLS between all components. Needs: java GenTls.java (creates docker/tls/out/<name> and TLS_STORE_PASSWORD).
+
+x-tls-env: &tls-env
+  SPRING_PROFILES_ACTIVE: docker,tls
+  JDK_JAVA_OPTIONS: "@/certs/jvm.args"            # JVM-wide key and trust store: Feign, JWKS and JDBC use them
+  TLS_STORE_PASSWORD: ${TLS_STORE_PASSWORD:?run java GenTls.java first}
+  CONFIG_SERVER_URL: https://config-server:8888
+  # this component's own certificate: the Spring SSL bundle "tls"
+  SPRING_SSL_BUNDLE_JKS_TLS_KEYSTORE_LOCATION: file:/certs/keystore.p12
+  SPRING_SSL_BUNDLE_JKS_TLS_KEYSTORE_TYPE: PKCS12
+  SPRING_SSL_BUNDLE_JKS_TLS_KEYSTORE_PASSWORD: ${TLS_STORE_PASSWORD}
+  SPRING_SSL_BUNDLE_JKS_TLS_TRUSTSTORE_LOCATION: file:/certs/truststore.p12
+  SPRING_SSL_BUNDLE_JKS_TLS_TRUSTSTORE_TYPE: PKCS12
+  SPRING_SSL_BUNDLE_JKS_TLS_TRUSTSTORE_PASSWORD: ${TLS_STORE_PASSWORD}
+  SERVER_SSL_BUNDLE: tls
+  # the config client runs before any configuration is loaded, so its TLS settings cannot come from the config server
+  SPRING_CLOUD_CONFIG_TLS_ENABLED: "true"
+  SPRING_CLOUD_CONFIG_TLS_KEYSTORE: file:/certs/keystore.p12
+  SPRING_CLOUD_CONFIG_TLS_KEYSTORETYPE: PKCS12
+  SPRING_CLOUD_CONFIG_TLS_KEYSTOREPASSWORD: ${TLS_STORE_PASSWORD}
+  SPRING_CLOUD_CONFIG_TLS_KEYPASSWORD: ${TLS_STORE_PASSWORD}
+  SPRING_CLOUD_CONFIG_TLS_TRUSTSTORE: file:/certs/truststore.p12
+  SPRING_CLOUD_CONFIG_TLS_TRUSTSTORETYPE: PKCS12
+  SPRING_CLOUD_CONFIG_TLS_TRUSTSTOREPASSWORD: ${TLS_STORE_PASSWORD}
+
+x-tls-health: &tls-health
+  test: ["CMD-SHELL", "sh /certs/healthcheck.sh"]
+
+x-tls: &tls                                       # internal services: clients must present a certificate
+  environment:
+    <<: *tls-env
+    SERVER_SSL_CLIENTAUTH: need
+  healthcheck: *tls-health
+
+x-tls-edge: &tls-edge                             # the gateway: anyone may connect, the services behind it are protected
+  environment:
+    <<: *tls-env
+    SERVER_SSL_CLIENTAUTH: none
+  healthcheck: *tls-health
+
+x-tls-want: &tls-want                             # auth-service: asks for a certificate but does not insist (see the notes)
+  environment:
+    <<: *tls-env
+    SERVER_SSL_CLIENTAUTH: want
+  healthcheck: *tls-health
+
+services:
+
+  config-server:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/config-server:/certs:ro
+
+  eureka-server:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/eureka-server:/certs:ro
+
+  api-gateway:
+    <<: *tls-edge
+    volumes:
+      - ./docker/tls/out/api-gateway:/certs:ro
+
+  auth-service:
+    <<: *tls-want
+    volumes:
+      - ./docker/tls/out/auth-service:/certs:ro
+
+  customer-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/customer-service:/certs:ro
+
+  product-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/product-service:/certs:ro
+
+  inventory-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/inventory-service:/certs:ro
+
+  cart-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/cart-service:/certs:ro
+
+  order-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/order-service:/certs:ro
+
+  payment-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/payment-service:/certs:ro
+
+  review-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/review-service:/certs:ro
+
+  campaign-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/campaign-service:/certs:ro
+
+  support-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/support-service:/certs:ro
+
+  wishlist-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/wishlist-service:/certs:ro
+
+  notification-service:
+    <<: *tls
+    volumes:
+      - ./docker/tls/out/notification-service:/certs:ro
+
+  mysql:
+    command:                                      # the base command plus the TLS options
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --ssl-ca=/certs/ca.crt
+      - --ssl-cert=/certs/tls.crt
+      - --ssl-key=/certs/tls.key
+      - --tls-version=TLSv1.2,TLSv1.3
+      - --require-secure-transport=ON             # plain TCP connections are refused
+    volumes:
+      - ./docker/tls/out/mysql:/certs:ro
+
+  kafka:
+    environment:
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:SSL,EXTERNAL:SSL,CONTROLLER:SSL
+      KAFKA_SSL_KEYSTORE_LOCATION: /certs/keystore.p12
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_PASSWORD: ${TLS_STORE_PASSWORD:?run java GenTls.java first}
+      KAFKA_SSL_KEY_PASSWORD: ${TLS_STORE_PASSWORD}
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /certs/truststore.p12
+      KAFKA_SSL_TRUSTSTORE_TYPE: PKCS12
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: ${TLS_STORE_PASSWORD}
+      KAFKA_SSL_CLIENT_AUTH: required             # mutual TLS: producers and consumers need a certificate
+    volumes:
+      - ./docker/tls/out/kafka:/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 --command-config /certs/client.properties > /dev/null 2>&1"]
