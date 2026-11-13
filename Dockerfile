@@ -6,7 +6,7 @@ WORKDIR /workspace
 COPY . .
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -Dmaven.test.skip=true package
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:24-jre AS runtime
 ARG MODULE
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
