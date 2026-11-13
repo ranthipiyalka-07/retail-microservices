@@ -1,0 +1,16 @@
+services:
+  config-server:        { image: "${REGISTRY:?}/retail-config-server:${TAG:?}" }
+  eureka-server:        { image: "${REGISTRY:?}/retail-eureka-server:${TAG:?}" }
+  api-gateway:          { image: "${REGISTRY:?}/retail-api-gateway:${TAG:?}" }
+  auth-service:         { image: "${REGISTRY:?}/retail-auth-service:${TAG:?}" }
+  customer-service:     { image: "${REGISTRY:?}/retail-customer-service:${TAG:?}" }
+  product-service:      { image: "${REGISTRY:?}/retail-product-service:${TAG:?}" }
+  inventory-service:    { image: "${REGISTRY:?}/retail-inventory-service:${TAG:?}" }
+  cart-service:         { image: "${REGISTRY:?}/retail-cart-service:${TAG:?}" }
+  order-service:        { image: "${REGISTRY:?}/retail-order-service:${TAG:?}" }
+  payment-service:      { image: "${REGISTRY:?}/retail-payment-service:${TAG:?}" }
+  review-service:       { image: "${REGISTRY:?}/retail-review-service:${TAG:?}" }
+  campaign-service:     { image: "${REGISTRY:?}/retail-campaign-service:${TAG:?}" }
+  support-service:      { image: "${REGISTRY:?}/retail-support-service:${TAG:?}" }
+  wishlist-service:     { image: "${REGISTRY:?}/retail-wishlist-service:${TAG:?}" }
+  notification-service: { image: "${REGISTRY:?}/retail-notification-service:${TAG:?}" }

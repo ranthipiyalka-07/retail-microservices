@@ -1,0 +1,173 @@
+name: ci-cd
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy, for example sha-1a2b3c4 or 1.2.0 (use it to roll back)
+        required: true
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [staging, production]
+        default: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: bash ci/build.sh
+      - name: Test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            **/target/surefire-reports/*.xml
+            **/target/site/jacoco/**
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Jars for the image stage
+        uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: '*/target/*.jar'
+          retention-days: 1
+
+  security:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: bash ci/secrets-scan.sh
+
+  package:
+    needs: build
+    runs-on: ${{ vars.SMOKE_RUNNER || 'ubuntu-latest' }}      # a larger runner helps: the smoke test starts about 12 containers
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then tag="${GITHUB_REF_NAME#v}"; else tag="sha-${GITHUB_SHA::7}"; fi
+          smoke=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] && [ "${{ github.event.pull_request.head.repo.full_name }}" != "$GITHUB_REPOSITORY" ]; then
+            smoke=false                                     # pull requests from forks get no secrets: no config repo checkout
+          fi
+          echo "registry=ghcr.io/$owner" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "smoke=$smoke" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: jars
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: trivy-${{ github.run_id }}
+          restore-keys: trivy-
+      - name: Build the images
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: bash ci/images.sh
+      - name: Scan the images
+        run: bash ci/scan-images.sh
+      - name: Check out the config repo
+        if: steps.meta.outputs.smoke == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.CONFIG_REPO || format('{0}/retail-config-repo', github.repository_owner) }}
+          token: ${{ secrets.CONFIG_REPO_TOKEN || github.token }}
+          path: config-repo
+      - name: Smoke test the secure stack
+        if: steps.meta.outputs.smoke == 'true'
+        env:
+          CONFIG_REPO_PATH: ${{ github.workspace }}/config-repo
+        run: bash ci/smoke-test.sh
+      - name: Logs of the test stack
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-logs
+          path: ci-logs/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Log in to the registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push the images
+        if: github.event_name != 'pull_request'
+        env:
+          REGISTRY: ${{ steps.meta.outputs.registry }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: bash ci/push.sh
+
+  deploy:
+    needs: [build, security, package]
+    if: >-
+      ${{ !cancelled() && (
+            github.event_name == 'workflow_dispatch' ||
+            (github.event_name == 'push' &&
+             (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
+             needs.build.result == 'success' && needs.security.result == 'success' && needs.package.result == 'success')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}
+    concurrency:
+      group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || needs.package.outputs.tag }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          bash ci/deploy.sh
