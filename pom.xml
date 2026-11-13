@@ -41,7 +41,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Must match the Boot version above (2025.0.x = Boot 3.5.x) -->
-        <spring-cloud.version>2025.0.3</spring-cloud.version>
+        <spring-cloud.version>2025.1.4</spring-cloud.version>
 
         <!-- Not managed by Spring Boot: pin them here (check for newer versions) -->
         <mapstruct.version>1.6.3</mapstruct.version>
