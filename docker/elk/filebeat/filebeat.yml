@@ -1,0 +1,10 @@
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      hints.default_config.enabled: false     # collect nothing unless the container asks for it
+
+output.logstash:
+  hosts: ["logstash:5044"]
+
+logging.level: warning

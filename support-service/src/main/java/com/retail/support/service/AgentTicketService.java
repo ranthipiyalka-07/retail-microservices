@@ -1,5 +1,6 @@
 package com.retail.support.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.common.event.SupportTicketRepliedEvent;
 import com.retail.support.config.SupportProperties;
@@ -99,6 +100,7 @@ public class AgentTicketService {
         }
         ticket.setUpdatedAt(Instant.now());
         log.info("Ticket claimed: ticketId={}, by={}", ticketId, staff.email());
+        Audit.record("support.ticket.claim", Audit.Outcome.SUCCESS, "ticket", ticketId, null);
         return detail(ticket);
     }
 
@@ -129,6 +131,7 @@ public class AgentTicketService {
         }
         ticket.setUpdatedAt(now);
         log.info("Ticket status changed: ticketId={}, {} -> {}, by={}", ticketId, from, target, staff.email());
+        Audit.record("support.ticket.status", Audit.Outcome.SUCCESS, "ticket", ticketId, from + " -> " + target);
         return detail(ticket);
     }
 

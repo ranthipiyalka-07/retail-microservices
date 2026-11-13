@@ -1,5 +1,6 @@
 package com.retail.order.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.common.event.OrderStatusChangedEvent;
 import com.retail.order.domain.CustomerOrder;
@@ -90,6 +91,7 @@ public class FulfilmentService {
         events.publishEvent(new OrderStatusChangedEvent(UUID.randomUUID(), now, orderId, order.getOrderNumber(),
                 order.getCustomerId(), order.getCustomerEmail(), from.name(), to.name(), tracking));
         log.info("Order status changed: orderId={}, {} -> {}, by={}", orderId, from, to, actor);
+        Audit.record("order.status.change", Audit.Outcome.SUCCESS, "order", orderId, from + " -> " + to);
 
         return assembler.detail(orders.findById(orderId).orElseThrow());
     }

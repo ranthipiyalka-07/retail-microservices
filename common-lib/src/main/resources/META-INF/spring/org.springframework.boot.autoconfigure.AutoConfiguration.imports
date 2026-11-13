@@ -1,1 +1,3 @@
 com.retail.common.config.CommonLibAutoConfiguration
+com.retail.common.outbox.OutboxAutoConfiguration
+com.retail.common.audit.AuditAutoConfiguration

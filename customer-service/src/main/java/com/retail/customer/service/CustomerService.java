@@ -1,5 +1,6 @@
 package com.retail.customer.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.common.event.CustomerRegisteredEvent;
 import com.retail.customer.client.AuthClient;
@@ -87,6 +88,7 @@ public class CustomerService {
         events.publishEvent(new CustomerRegisteredEvent(UUID.randomUUID(), Instant.now(),
                 customer.getId(), customer.getEmail(), customer.getFirstName()));
         log.info("Customer registered: customerId={}", customer.getId());
+        Audit.recordAs(Audit.Actor.user(email), "customer.register", Audit.Outcome.SUCCESS, "customer", customer.getId(), null);
         return toResponse(customer);
     }
 
@@ -107,6 +109,7 @@ public class CustomerService {
             customer.setConsentAt(Instant.now());
         }
         customer.setConsentMarketing(consent);
+        Audit.record("customer.profile.update", Audit.Outcome.SUCCESS, "customer", customerId, null);
         return toResponse(customer);
     }
 

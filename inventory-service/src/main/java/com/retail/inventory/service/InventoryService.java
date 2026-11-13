@@ -1,5 +1,6 @@
 package com.retail.inventory.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.inventory.config.InventoryProperties;
 import com.retail.inventory.domain.InventoryAudit;
@@ -101,6 +102,7 @@ public class InventoryService {
         }
         lowStock.notifyIfCrossed(item, previousAvailable);
         log.info("Stock set: productId={}, {} -> {}, by={}", productId, previousOnHand, newQuantity, actor);
+        Audit.record("inventory.stock.set", Audit.Outcome.SUCCESS, "product", productId, previousOnHand + " -> " + newQuantity + " (" + request.reason().trim() + ")");
         return toResponse(item);
     }
 

@@ -6,6 +6,7 @@ import com.retail.campaign.dto.*;
 import com.retail.campaign.exception.ConflictException;
 import com.retail.campaign.exception.InvalidRequestException;
 import com.retail.campaign.repository.CampaignRepository;
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.common.event.CampaignChangedEvent;
 import org.slf4j.Logger;
@@ -57,6 +58,7 @@ public class CampaignService {
         apply(campaign, request);
         campaigns.saveAndFlush(campaign);
         log.info("Campaign created: id={}, by={}", campaign.getId(), actor);
+        Audit.record("campaign.create", Audit.Outcome.SUCCESS, "campaign", campaign.getId(), null);
         return toResponse(campaign, Instant.now());
     }
 
@@ -112,6 +114,7 @@ public class CampaignService {
         }
         campaign.setStatus(CampaignStatus.SCHEDULED);
         log.info("Campaign published: id={}, startAt={}, endAt={}", id, campaign.getStartAt(), campaign.getEndAt());
+        Audit.record("campaign.publish", Audit.Outcome.SUCCESS, "campaign", id, null);
         return toResponse(campaign, now);
     }
 
@@ -146,6 +149,7 @@ public class CampaignService {
         }
         campaigns.delete(campaign);
         log.info("Campaign deleted: id={}", id);
+        Audit.record("campaign.delete", Audit.Outcome.SUCCESS, "campaign", id, null);
     }
 
     // ================= public =================

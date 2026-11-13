@@ -4,6 +4,8 @@
     <option name="idToDisplayName">
       <map>
         <entry key="Lombok plugin" value="Lombok integration problem" />
+        <entry key="Plugins Suggestion" value="Plugin suggestions available" />
+        <entry key="WindowsDefender" value="Microsoft Defender may affect IDE" />
       </map>
     </option>
   </component>

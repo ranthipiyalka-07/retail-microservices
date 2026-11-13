@@ -1,5 +1,6 @@
 package com.retail.order.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.order.client.CartClient;
 import com.retail.order.client.Downstream;
@@ -117,6 +118,7 @@ public class OrderSaga {
         // 3. act on the answer
         settle(orderId, payment);
         CustomerOrder after = state.find(orderId).orElseThrow(() -> new ResourceNotFoundException("Order", orderId));
+        Audit.record("order.place", after.getStatus() == OrderStatus.CONFIRMED ? Audit.Outcome.SUCCESS : Audit.Outcome.FAILURE, "order", orderId, "status=" + after.getStatus());
         return outcome(after, true);
     }
 
@@ -257,6 +259,7 @@ public class OrderSaga {
                     throw new ConflictException("The order changed at the same time. Please check its status and try again.");
                 }
                 compensate(orderId);
+                Audit.record("order.cancel", Audit.Outcome.SUCCESS, "order", orderId, order.getOrderNumber());
             }
             case PENDING -> throw new ConflictException("The order is still being processed. Please try again in a moment.");
             case FAILED, PAYMENT_FAILED -> throw new ConflictException("This order was never completed, so there is nothing to cancel.");

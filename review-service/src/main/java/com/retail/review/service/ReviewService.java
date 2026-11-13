@@ -1,5 +1,6 @@
 package com.retail.review.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.common.event.ReviewPublishedEvent;
 import com.retail.review.client.PurchaseLookup;
@@ -176,6 +177,7 @@ public class ReviewService {
                 summaries.applyDelta(productId, sign, (long) sign * review.getRating(), now);
                 events.publishEvent(new RatingChanged(productId));
                 log.info("Review moderated: reviewId={}, productId={}, status={}, by={}", reviewId, productId, target, actor);
+                Audit.record("review.moderate", Audit.Outcome.SUCCESS, "review", reviewId, "status=" + target);
             }
             return toMine(review);
         });

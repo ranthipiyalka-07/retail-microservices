@@ -1,5 +1,6 @@
 package com.retail.notification.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.notification.domain.NotificationLog;
 import com.retail.notification.domain.NotificationStatus;
@@ -99,6 +100,7 @@ public class NotificationAdminService {
         template.setUpdatedAt(Instant.now());
         template.setUpdatedBy(actor);
         log.info("Template updated: code={}, active={}, by={}", code, template.isActive(), actor);
+        Audit.record("notification.template.update", Audit.Outcome.SUCCESS, "template", code, "active=" + template.isActive());
         return toResponse(template);
     }
 

@@ -1,5 +1,6 @@
 package com.retail.product.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.product.domain.Product;
 import com.retail.product.domain.ProductAttribute;
@@ -110,6 +111,7 @@ public class ProductService {
             throw new ConflictException("SKU '" + sku + "' already exists");
         }
         log.info("Product created: id={}, sku={}", product.getId(), sku);
+        Audit.record("product.create", Audit.Outcome.SUCCESS, "product", product.getId(), "sku=" + sku);
         return ProductMapper.toDetail(product);
     }
 
@@ -131,6 +133,7 @@ public class ProductService {
         }
         apply(product, request);
         log.info("Product updated: id={}", id);
+        Audit.record("product.update", Audit.Outcome.SUCCESS, "product", product.getId(), "sku=" + sku);
         return ProductMapper.toDetail(product);
     }
 
@@ -141,6 +144,8 @@ public class ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
         product.setStatus(ProductStatus.DELETED);
         log.info("Product deleted (soft): id={}", id);
+        Audit.record("product.update", Audit.Outcome.SUCCESS, "product", product.getId(), null);
+
     }
 
     // ---------- helpers ----------

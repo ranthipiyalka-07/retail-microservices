@@ -1,6 +1,7 @@
 
 package com.retail.payment.service;
 
+import com.retail.common.audit.Audit;
 import com.retail.common.error.ResourceNotFoundException;
 import com.retail.common.event.PaymentResultEvent;
 import com.retail.payment.config.PaymentProperties;
@@ -220,6 +221,8 @@ public class PaymentService {
                     p.getOrderId(),
                     p.getStatus()
             );
+
+            Audit.record("payment.charge", result.approved() ? Audit.Outcome.SUCCESS : Audit.Outcome.FAILURE, "payment", p.getId(), "orderId=" + p.getOrderId() + " amount=" + p.getAmount() + " " + p.getCurrency());
 
             return toResponse(p);
         });
@@ -454,6 +457,8 @@ public class PaymentService {
                     paymentId,
                     refund.getStatus()
             );
+
+            Audit.record("payment.refund", result.approved() ? Audit.Outcome.SUCCESS : Audit.Outcome.FAILURE, "payment", paymentId, "refundId=" + refundId + " amount=" + refund.getAmount());
 
             return toRefundResponse(
                     refund,

@@ -1,0 +1,513 @@
+name: retail
+
+# ---------- shared settings ----------
+x-common-env: &common-env
+  SPRING_PROFILES_ACTIVE: docker
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC"
+  TZ: UTC
+  CONFIG_SERVER_URL: http://config-server:8888
+  CONFIG_USER: ${CONFIG_USER:?set CONFIG_USER in .env}
+  CONFIG_PASSWORD: ${CONFIG_PASSWORD:?set CONFIG_PASSWORD in .env}
+  INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+  AES_KEY: ${AES_KEY:?set AES_KEY in .env}
+  DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+  LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
+
+x-health: &health
+  interval: 10s
+  timeout: 5s
+  retries: 20
+  start_period: 40s
+
+x-service: &service
+  restart: unless-stopped
+  mem_limit: 640m
+  labels:
+    co.elastic.logs/enabled: "true"
+
+x-infra-deps: &infra-deps
+  config-server: { condition: service_healthy }
+  eureka-server: { condition: service_healthy }
+
+# ---------- containers ----------
+services:
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+00:00"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    ports:
+      - "127.0.0.1:3307:3306"          # 3307 so it does not clash with a MySQL on your machine
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  kafka:
+    image: apache/kafka:3.9.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,EXTERNAL://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+    ports:
+      - "127.0.0.1:9092:9092"          # lets apps started from IntelliJ reach the broker too
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"          # the inbox: http://localhost:8025
+
+  config-server:
+    <<: *service
+    build: { context: ., args: { MODULE: config-server } }
+    image: retail/config-server:dev
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC"
+      SPRING_SECURITY_USER_NAME: ${CONFIG_USER}
+      SPRING_SECURITY_USER_PASSWORD: ${CONFIG_PASSWORD}
+      CONFIG_REPO_URI: file:///config-repo
+      SPRING_CLOUD_CONFIG_SERVER_GIT_URI: file:///config-repo
+    volumes:
+      - ${CONFIG_REPO_PATH:?set CONFIG_REPO_PATH in .env}:/config-repo:ro
+    ports:
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS -u \"$$SPRING_SECURITY_USER_NAME:$$SPRING_SECURITY_USER_PASSWORD\" http://localhost:8888/actuator/health > /dev/null || exit 1"]
+
+  eureka-server:
+    <<: *service
+    build: { context: ., args: { MODULE: eureka-server } }
+    image: retail/eureka-server:dev
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=65 -XX:+UseSerialGC"
+    ports:
+      - "127.0.0.1:8761:8761"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health > /dev/null || exit 1"]
+
+  api-gateway:
+    <<: *service
+    build: { context: ., args: { MODULE: api-gateway } }
+    image: retail/api-gateway:dev
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *infra-deps
+    ports:
+      - "8080:8080"                    # the one public entry point
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health > /dev/null || exit 1"]
+
+  auth-service:
+    <<: *service
+    build: { context: ., args: { MODULE: auth-service } }
+    image: retail/auth-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: auth_db
+      DB_USER: auth_user
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?set JWT_PRIVATE_KEY in .env}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY in .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8081:8081"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health > /dev/null || exit 1"]
+
+  customer-service:
+    <<: *service
+    build: { context: ., args: { MODULE: customer-service } }
+    image: retail/customer-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: customer_db
+      DB_USER: customer_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8082:8082"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/actuator/health > /dev/null || exit 1"]
+
+  product-service:
+    <<: *service
+    build: { context: ., args: { MODULE: product-service } }
+    image: retail/product-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: product_db
+      DB_USER: product_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8083:8083"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/actuator/health > /dev/null || exit 1"]
+
+  inventory-service:
+    <<: *service
+    build: { context: ., args: { MODULE: inventory-service } }
+    image: retail/inventory-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: inventory_db
+      DB_USER: inventory_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8084:8084"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/actuator/health > /dev/null || exit 1"]
+
+  cart-service:
+    <<: *service
+    build: { context: ., args: { MODULE: cart-service } }
+    image: retail/cart-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: cart_db
+      DB_USER: cart_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8085:8085"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8085/actuator/health > /dev/null || exit 1"]
+
+  order-service:
+    <<: *service
+    build: { context: ., args: { MODULE: order-service } }
+    image: retail/order-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: order_db
+      DB_USER: order_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8086:8086"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8086/actuator/health > /dev/null || exit 1"]
+
+  payment-service:
+    <<: *service
+    build: { context: ., args: { MODULE: payment-service } }
+    image: retail/payment-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: payment_db
+      DB_USER: payment_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8087:8087"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8087/actuator/health > /dev/null || exit 1"]
+
+  review-service:
+    <<: *service
+    build: { context: ., args: { MODULE: review-service } }
+    image: retail/review-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: review_db
+      DB_USER: review_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8088:8088"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8088/actuator/health > /dev/null || exit 1"]
+
+  campaign-service:
+    <<: *service
+    build: { context: ., args: { MODULE: campaign-service } }
+    image: retail/campaign-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: campaign_db
+      DB_USER: campaign_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8089:8089"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8089/actuator/health > /dev/null || exit 1"]
+
+  support-service:
+    <<: *service
+    build: { context: ., args: { MODULE: support-service } }
+    image: retail/support-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: support_db
+      DB_USER: support_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:8090"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8090/actuator/health > /dev/null || exit 1"]
+
+  wishlist-service:
+    <<: *service
+    build: { context: ., args: { MODULE: wishlist-service } }
+    image: retail/wishlist-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: wishlist_db
+      DB_USER: wishlist_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8091:8091"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8091/actuator/health > /dev/null || exit 1"]
+
+  notification-service:
+    <<: *service
+    build: { context: ., args: { MODULE: notification-service } }
+    image: retail/notification-service:dev
+    environment:
+      <<: *common-env
+      DB_NAME: notification_db
+      DB_USER: notification_user
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      mailhog: { condition: service_started }
+    ports:
+      - "127.0.0.1:8092:8092"
+    healthcheck:
+      <<: *health
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8092/actuator/health > /dev/null || exit 1"]
+
+  elasticsearch:
+    profiles: [ "observability" ]
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.0
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"          # DEVELOPMENT ONLY: see the notes below
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    mem_limit: 1536m
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    ports:
+      - "127.0.0.1:9200:9200"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS 'http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' > /dev/null || exit 1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 40s
+
+  kibana:
+    profiles: [ "observability" ]
+    image: docker.elastic.co/kibana/kibana:8.19.0
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    mem_limit: 1024m
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:5601:5601"
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:5601/api/status > /dev/null || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 60s
+
+  elk-init:
+    profiles: [ "observability" ]
+    image: curlimages/curl:8.11.0              # if the tag does not exist, use "latest"
+    restart: "no"
+    command: [ "/bin/sh", "/setup.sh", "init" ]
+    volumes:
+      - ./docker/elk/setup.sh:/setup.sh:ro
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+      kibana: { condition: service_healthy }
+
+  elk-maintenance:
+    profiles: [ "observability" ]
+    image: curlimages/curl:8.11.0
+    restart: unless-stopped
+    command: [ "/bin/sh", "/setup.sh", "maintain" ]
+    volumes:
+      - ./docker/elk/setup.sh:/setup.sh:ro
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+
+  logstash:
+    profiles: [ "observability" ]
+    image: docker.elastic.co/logstash/logstash:8.19.0
+    restart: unless-stopped
+    environment:
+      LS_JAVA_OPTS: -Xms256m -Xmx256m
+      XPACK_MONITORING_ENABLED: "false"
+      PIPELINE_ECS_COMPATIBILITY: disabled
+    mem_limit: 768m
+    volumes:
+      - ./docker/elk/logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    depends_on:
+      elk-init: { condition: service_completed_successfully }
+
+  filebeat:
+    profiles: [ "observability" ]
+    image: docker.elastic.co/beats/filebeat:8.19.0
+    restart: unless-stopped
+    user: root
+    command: [ "filebeat", "-e", "--strict.perms=false" ]
+    mem_limit: 256m
+    volumes:
+      - ./docker/elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      logstash: { condition: service_started }
+
+  zipkin:
+    profiles: [ "observability" ]
+    image: openzipkin/zipkin:3                 # pin an exact version once it works for you
+    restart: unless-stopped
+    environment:
+      STORAGE_TYPE: elasticsearch
+      ES_HOSTS: http://elasticsearch:9200
+      ES_INDEX: zipkin
+      ES_INDEX_REPLICAS: "0"
+      JAVA_OPTS: -Xms128m -Xmx384m
+    mem_limit: 640m
+    depends_on:
+      elasticsearch: { condition: service_healthy }
+    ports:
+      - "127.0.0.1:9411:9411"                  # also reachable from services you run in IntelliJ
+
+volumes:
+  mysql-data:
+  es-data:
+

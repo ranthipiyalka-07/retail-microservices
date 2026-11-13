@@ -53,6 +53,15 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
+        <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-tracing-bridge-brave</artifactId></dependency>
+        <dependency><groupId>io.zipkin.reporter2</groupId><artifactId>zipkin-reporter-brave</artifactId></dependency>
     </dependencies>
 
     <!-- NO spring-boot-maven-plugin here. It would repackage the jar so other modules cannot use its classes. -->

@@ -17,6 +17,7 @@ import com.retail.auth.exception.InvalidTokenException;
 import com.retail.auth.repository.RefreshTokenRepository;
 import com.retail.auth.repository.RoleRepository;
 import com.retail.auth.repository.UserCredentialsRepository;
+import com.retail.common.audit.Audit;
 import com.retail.common.security.Roles;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,12 +65,14 @@ public class AuthService {
         UserCredentials user = users.findByEmail(normalize(request.email())).orElse(null);
 
         if(user ==null){
+            Audit.recordAs(Audit.Actor.user(normalize(request.email())), "auth.login", Audit.Outcome.FAILURE, "user", null, "unknown email");
             passwordEncoder.matches(request.password(),dummyHash);
             throw new InvalidCredentialsException();
         }
 
         if(user.getStatus()== AccountStatus.LOCKED){
             if(user.getLockedUntil()!=null && user.getLockedUntil().isAfter(now)){
+                Audit.recordAs(Audit.Actor.user(user.getEmail()), "auth.login", Audit.Outcome.FAILURE, "user", user.getId(), "account locked");
                 throw new AccountLockedException();
             }
             user.unlock();
@@ -86,6 +89,7 @@ public class AuthService {
         }
 
         user.registerSuccessfulLogin(now);
+        Audit.recordAs(Audit.Actor.user(user.getEmail()), "auth.login", Audit.Outcome.SUCCESS, "user", user.getId(), null);
         return issueTokens(user,deviceInfo);
     }
 
@@ -96,6 +100,7 @@ public class AuthService {
         if(stored.isRevoked()){
             refreshTokens.revokeAllForUser(stored.getUser().getId());
             log.warn("Refresh token reuse detected for userId={}: all sessions revoked", stored.getUser().getId());
+            Audit.recordAs(Audit.Actor.user(stored.getUser().getEmail()), "auth.refresh.reuse", Audit.Outcome.FAILURE, "user", stored.getUser().getId(), "refresh token reuse: all sessions revoked");
             throw new InvalidTokenException();
         }
 
@@ -141,6 +146,7 @@ public class AuthService {
 
         try {
             users.saveAndFlush(user);       // flush now so a duplicate shows up here, not at commit
+            Audit.record("auth.credentials.create", Audit.Outcome.SUCCESS, "user", user.getId(), null);
         } catch (DataIntegrityViolationException e) {
             throw new CredentialsAlreadyExistException("An account with this email already exists");
         }
