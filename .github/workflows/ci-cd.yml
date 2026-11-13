@@ -38,7 +38,7 @@ jobs:
       - run: bash ci/build.sh
       - name: Test and coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports
           path: |
@@ -47,7 +47,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
       - name: Jars for the image stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: jars
           path: '*/target/*.jar'
@@ -118,7 +118,7 @@ jobs:
         run: bash ci/smoke-test.sh
       - name: Logs of the test stack
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-logs
           path: ci-logs/
