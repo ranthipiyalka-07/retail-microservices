@@ -1,0 +1,67 @@
+# Secrets live in HashiCorp Vault. Needs: docker-compose.tls.yml and java GenTls.java --add vault.
+
+services:
+
+  vault:
+    image: hashicorp/vault:1.18              # or a newer 1.x tag
+    restart: unless-stopped
+    command: ["server"]
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200     # for the health check
+    mem_limit: 256m
+    volumes:
+      - ./docker/vault/vault.hcl:/vault/config/vault.hcl:ro
+      - ./docker/tls/out/vault:/certs:ro
+      - vault-data:/vault/file
+      - vault-audit:/vault/logs
+    ports:
+      - "127.0.0.1:8200:8200"                # the UI: http://localhost:8200/ui
+    healthcheck:
+      test: [ "CMD-SHELL", "VAULT_ADDR=http://127.0.0.1:8200 VAULT_CACERT= vault status > /dev/null 2>&1; [ $$? -ne 1 ]" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  vault-init:
+    image: hashicorp/vault:1.18
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/init/init.sh"]
+    environment:                              # read on the first start only
+      IMPORT_INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
+      IMPORT_AES_KEY: ${AES_KEY:-}
+      IMPORT_DB_PASSWORD: ${DB_PASSWORD:-}
+      IMPORT_JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}
+      IMPORT_JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:-}
+      IMPORT_ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      IMPORT_ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    mem_limit: 128m
+    volumes:
+      - ./docker/vault/init.sh:/init/init.sh:ro
+      - ./docker/vault/vault.sh:/init/vault.sh:ro
+      - ./docker/tls/out/vault:/certs:ro
+      - vault-init-data:/vault-init
+      - bootstrap-config:/bootstrap
+    depends_on:
+      vault: { condition: service_healthy }
+    healthcheck:                              # healthy once Vault is unsealed and configured
+      test: ["CMD-SHELL", "test -f /tmp/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
+
+  config-server:
+    environment:
+      SPRING_PROFILES_ACTIVE: git,vault       # git AND Vault, as a composite
+      SPRING_CONFIG_IMPORT: configtree:/bootstrap/   # the token and the encryption key, one file each
+    volumes:
+      - bootstrap-config:/bootstrap:ro
+    depends_on:
+      vault-init: { condition: service_healthy }
+
+volumes:
+  vault-data:
+  vault-audit:
+  vault-init-data:
+  bootstrap-config:

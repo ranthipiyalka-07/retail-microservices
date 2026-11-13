@@ -1,0 +1,15 @@
+spring:
+  cloud:
+    config:
+      server:
+        git:
+          order: 2                         # git comes second: Vault wins whenever both define a key
+        vault:
+          order: 1
+          scheme: http
+          host: vault
+          port: 8200
+          backend: secret
+          default-key: application
+          kv-version: 2
+          authentication: TOKEN            # the token itself comes from the bootstrap volume

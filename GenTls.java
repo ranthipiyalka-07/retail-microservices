@@ -39,11 +39,20 @@ public class GenTls {
         ENTITIES.put("mysql", 0);
         ENTITIES.put("kafka", 0);
         ENTITIES.put("dev-client", 0);          // your own identity for browsers and PowerShell
+        ENTITIES.put("vault", 0);
     }
 
     static final boolean WINDOWS = System.getProperty("os.name").toLowerCase().contains("win");
 
     public static void main(String[] args) throws Exception {
+        if (args.length == 2 && args[0].equals("--add")) {          // one more certificate under the existing CA
+            String name = args[1];
+            issue(name, ENTITIES.getOrDefault(name, 0), Path.of("docker", "tls", "ca"),
+                    Path.of("docker", "tls", "out", name), storePassword(false));
+            makeReadable(Path.of("docker", "tls"));
+            System.out.println("Issued docker/tls/out/" + name);
+            return;
+        }
         boolean force = List.of(args).contains("--force");
         Path caDir = Path.of("docker", "tls", "ca");
         Path outDir = Path.of("docker", "tls", "out");

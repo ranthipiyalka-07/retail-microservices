@@ -8,9 +8,9 @@ x-common-env: &common-env
   CONFIG_SERVER_URL: http://config-server:8888
   CONFIG_USER: ${CONFIG_USER:?set CONFIG_USER in .env}
   CONFIG_PASSWORD: ${CONFIG_PASSWORD:?set CONFIG_PASSWORD in .env}
-  INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
-  AES_KEY: ${AES_KEY:?set AES_KEY in .env}
-  DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+  #INTERNAL_API_KEY: ${INTERNAL_API_KEY:?set INTERNAL_API_KEY in .env}
+  #AES_KEY: ${AES_KEY:?set AES_KEY in .env}
+  #DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
   KAFKA_BOOTSTRAP_SERVERS: kafka:19092
   LOGGING_STRUCTURED_FORMAT_CONSOLE: ecs
 
@@ -138,10 +138,10 @@ services:
       <<: *common-env
       DB_NAME: auth_db
       DB_USER: auth_user
-      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?set JWT_PRIVATE_KEY in .env}
-      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY in .env}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      #JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?set JWT_PRIVATE_KEY in .env}
+      #JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY in .env}
+      #ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      #ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
     depends_on:
       config-server:
         condition: service_healthy

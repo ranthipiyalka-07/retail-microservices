@@ -33,6 +33,8 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency><groupId>org.springframework.vault</groupId><artifactId>spring-vault-core</artifactId></dependency>
     </dependencies>
 
     <build>
