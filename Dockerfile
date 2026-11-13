@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # The build stage does not depend on MODULE, so Docker builds it once and every service image reuses it.
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /workspace
 COPY . .
 RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp -Dmaven.test.skip=true package
