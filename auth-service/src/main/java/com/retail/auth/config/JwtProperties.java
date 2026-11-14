@@ -1,6 +1,6 @@
 package com.retail.auth.config;
 
-import jakarta.ws.rs.DefaultValue;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;

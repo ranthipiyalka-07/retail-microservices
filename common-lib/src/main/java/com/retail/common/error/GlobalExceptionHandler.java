@@ -2,7 +2,7 @@ package com.retail.common.error;
 
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.nio.file.AccessDeniedException;
+import org.springframework.security.access.AccessDeniedException;
 import java.time.Instant;
 import java.util.List;
 

@@ -144,7 +144,7 @@ public class ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
         product.setStatus(ProductStatus.DELETED);
         log.info("Product deleted (soft): id={}", id);
-        Audit.record("product.update", Audit.Outcome.SUCCESS, "product", product.getId(), null);
+        Audit.record("product.delete", Audit.Outcome.SUCCESS, "product", product.getId(), null);
 
     }
 

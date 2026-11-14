@@ -1,6 +1,5 @@
 package com.retail.auth.service;
 
-import ch.qos.logback.core.util.StringUtil;
 import com.retail.auth.config.AuthProperties;
 import com.retail.auth.domain.AccountStatus;
 import com.retail.auth.domain.Role;

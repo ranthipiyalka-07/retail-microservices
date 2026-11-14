@@ -16,8 +16,8 @@ spring:
       name: ${CONFIG_USER:admin}
       password: ${CONFIG_PASSWORD:admin}
 
-  management:
-    endpoints:
-      web:
-        exposure:
-          include: health,info
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -12,7 +12,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import io.micrometer.tracing.Tracer;
-import org.springframework.beans.factory.ObjectProvider;
 
 @AutoConfiguration(afterName = {
         "org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration",
